@@ -13,13 +13,13 @@ from .sedes import (
     hash32,
 )
 
+from typing import Any
+
 
 class Account(rlp.Serializable):
     """
     RLP object for accounts.
     """
-    # TODO: add _cached_rlp class attribute and measure speed.
-
     fields = [
         ('nonce', big_endian_int),
         ('balance', big_endian_int),
@@ -28,9 +28,9 @@ class Account(rlp.Serializable):
     ]
 
     def __init__(self,
-                 nonce=0,
-                 balance=0,
-                 storage_root=BLANK_ROOT_HASH,
-                 code_hash=EMPTY_SHA3,
-                 **kwargs):
-        super(Account, self).__init__(nonce, balance, storage_root, code_hash, **kwargs)
+                 nonce: int=0,
+                 balance: int=0,
+                 storage_root: bytes=BLANK_ROOT_HASH,
+                 code_hash: bytes=EMPTY_SHA3,
+                 **kwargs: Any) -> None:
+        super().__init__(nonce, balance, storage_root, code_hash, **kwargs)

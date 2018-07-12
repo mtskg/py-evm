@@ -6,18 +6,15 @@ from evm.vm.forks.tangerine_whistle.constants import (
     GAS_SELFDESTRUCT_EIP150,
     GAS_CALL_EIP150
 )
-from evm import opcode_values
-from evm import mnemonics
-
-from evm.opcode import as_opcode
-
-from evm.logic import (
+from evm.vm import mnemonics
+from evm.vm import opcode_values
+from evm.vm.forks.tangerine_whistle.opcodes import TANGERINE_WHISTLE_OPCODES
+from evm.vm.logic import (
     arithmetic,
     system,
     call,
 )
-
-from evm.vm.forks.tangerine_whistle.opcodes import TANGERINE_WHISTLE_OPCODES
+from evm.vm.opcode import as_opcode
 
 from .constants import (
     GAS_EXP_EIP160,
@@ -37,7 +34,7 @@ UPDATED_OPCODES = {
         gas_cost=GAS_SELFDESTRUCT_EIP150,
     ),
     opcode_values.CALL: call.CallEIP161.configure(
-        name='opcode:CALL',
+        __name__='opcode:CALL',
         mnemonic=mnemonics.CALL,
         gas_cost=GAS_CALL_EIP150,
     )(),

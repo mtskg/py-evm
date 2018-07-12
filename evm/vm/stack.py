@@ -14,16 +14,22 @@ from evm.utils.numeric import (
     big_endian_to_int,
 )
 
+from typing import (  # noqa: F401
+    List,
+    Union
+)
+from eth_typing import Hash32  # noqa: F401
+
 
 class Stack(object):
     """
     VM Stack
     """
-    values = None
+    __slots__ = ['values']
     logger = logging.getLogger('evm.vm.stack.Stack')
 
     def __init__(self):
-        self.values = []
+        self.values = []  # type: List[Union[int, Hash32]]
 
     def __len__(self):
         return len(self.values)
@@ -39,7 +45,7 @@ class Stack(object):
 
         self.values.append(value)
 
-    def pop(self, num_items=1, type_hint=None):
+    def pop(self, num_items, type_hint):
         """
         Pop an item off thes stack.
 

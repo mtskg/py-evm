@@ -1,11 +1,17 @@
-from ..homestead import HomesteadVM
+from typing import Type  # noqa: F401
+from evm.rlp.blocks import BaseBlock  # noqa: F401
+from evm.vm.state import BaseState  # noqa: F401
+
+from ..tangerine_whistle import TangerineWhistleVM
 
 from .blocks import SpuriousDragonBlock
-from .vm_state import SpuriousDragonVMState
+from .state import SpuriousDragonState
 
-SpuriousDragonVM = HomesteadVM.configure(
-    name='SpuriousDragonVM',
+
+class SpuriousDragonVM(TangerineWhistleVM):
+    # fork name
+    fork = 'spurious-dragon'  # type: str
+
     # classes
-    _block_class=SpuriousDragonBlock,
-    _state_class=SpuriousDragonVMState,
-)
+    block_class = SpuriousDragonBlock  # type: Type[BaseBlock]
+    _state_class = SpuriousDragonState  # type: Type[BaseState]

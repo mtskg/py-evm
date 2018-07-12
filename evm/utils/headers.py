@@ -1,5 +1,9 @@
 import time
+from typing import Callable, Tuple, Optional
 
+from eth_typing import (
+    Address
+)
 from evm.constants import (
     GENESIS_GAS_LIMIT,
     GAS_LIMIT_EMA_DENOMINATOR,
@@ -13,7 +17,7 @@ from evm.rlp.headers import (
 )
 
 
-def compute_gas_limit_bounds(parent):
+def compute_gas_limit_bounds(parent: BlockHeader) -> Tuple[int, int]:
     """
     Compute the boundaries for the block gas limit based on the parent block.
     """
@@ -23,7 +27,7 @@ def compute_gas_limit_bounds(parent):
     return lower_bound, upper_bound
 
 
-def compute_gas_limit(parent_header, gas_limit_floor):
+def compute_gas_limit(parent_header: BlockHeader, gas_limit_floor: int) -> int:
     """
     A simple strategy for adjusting the gas limit.
 
@@ -74,11 +78,11 @@ def compute_gas_limit(parent_header, gas_limit_floor):
 
 
 def generate_header_from_parent_header(
-        compute_difficulty_fn,
-        parent_header,
-        coinbase,
-        timestamp=None,
-        extra_data=b''):
+        compute_difficulty_fn: Callable[[BlockHeader, int], int],
+        parent_header: BlockHeader,
+        coinbase: Address,
+        timestamp: Optional[int] = None,
+        extra_data: bytes = b'') -> BlockHeader:
     """
     Generate BlockHeader from state_root and parent_header
     """

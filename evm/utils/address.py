@@ -1,18 +1,13 @@
 import rlp
 
-from .keccak import (
-    keccak,
-)
-from .padding import (
-    pad_left,
-)
+from eth_hash.auto import keccak
 
 
-def force_bytes_to_address(value):
+def force_bytes_to_address(value: bytes) -> bytes:
     trimmed_value = value[-20:]
-    padded_value = pad_left(trimmed_value, 20, b'\x00')
+    padded_value = trimmed_value.rjust(20, b'\x00')
     return padded_value
 
 
-def generate_contract_address(address, nonce):
+def generate_contract_address(address: bytes, nonce: bytes) -> bytes:
     return keccak(rlp.encode([address, nonce]))[-20:]

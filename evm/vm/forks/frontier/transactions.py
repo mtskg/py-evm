@@ -1,10 +1,10 @@
 import rlp
 
 from evm.constants import (
+    CREATE_CONTRACT_ADDRESS,
     GAS_TX,
     GAS_TXDATAZERO,
     GAS_TXDATANONZERO,
-    CREATE_CONTRACT_ADDRESS,
 )
 from evm.validation import (
     validate_uint256,
@@ -30,6 +30,9 @@ from evm.utils.transactions import (
 
 class FrontierTransaction(BaseTransaction):
 
+    v_max = 28
+    v_min = 27
+
     def validate(self):
         validate_uint256(self.nonce, title="Transaction.nonce")
         validate_uint256(self.gas_price, title="Transaction.gas_price")
@@ -48,10 +51,10 @@ class FrontierTransaction(BaseTransaction):
         validate_lt_secpk1n(self.s, title="Transaction.s")
         validate_gte(self.s, minimum=1, title="Transaction.s")
 
-        validate_gte(self.v, minimum=27, title="Transaction.v")
-        validate_lte(self.v, maximum=28, title="Transaction.v")
+        validate_gte(self.v, minimum=self.v_min, title="Transaction.v")
+        validate_lte(self.v, maximum=self.v_max, title="Transaction.v")
 
-        super(FrontierTransaction, self).validate()
+        super().validate()
 
     def check_signature_validity(self):
         validate_transaction_signature(self)
@@ -87,7 +90,7 @@ class FrontierUnsignedTransaction(BaseUnsignedTransaction):
             validate_canonical_address(self.to, title="Transaction.to")
         validate_uint256(self.value, title="Transaction.value")
         validate_is_bytes(self.data, title="Transaction.data")
-        super(FrontierUnsignedTransaction, self).validate()
+        super().validate()
 
     def as_signed_transaction(self, private_key):
         v, r, s = create_transaction_signature(self, private_key)
@@ -102,6 +105,9 @@ class FrontierUnsignedTransaction(BaseUnsignedTransaction):
             r=r,
             s=s,
         )
+
+    def get_intrinsic_gas(self):
+        return _get_frontier_intrinsic_gas(self.data)
 
 
 def _get_frontier_intrinsic_gas(transaction_data):

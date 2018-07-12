@@ -1,6 +1,11 @@
-from evm import constants
+from eth_hash.auto import keccak
+
+from evm.constants import (
+    GAS_CODEDEPOSIT,
+    STACK_DEPTH_LIMIT,
+)
 from evm import precompiles
-from evm.computation import (
+from evm.vm.computation import (
     BaseComputation
 )
 from evm.exceptions import (
@@ -14,9 +19,6 @@ from evm.utils.address import (
 from evm.utils.hexadecimal import (
     encode_hex,
 )
-from evm.utils.keccak import (
-    keccak,
-)
 
 from .opcodes import FRONTIER_OPCODES
 
@@ -29,47 +31,50 @@ FRONTIER_PRECOMPILES = {
 
 
 class FrontierComputation(BaseComputation):
+    """
+    A class for all execution computations in the ``Frontier`` fork.
+    Inherits from :class:`~evm.vm.computation.BaseComputation`
+    """
     # Override
     opcodes = FRONTIER_OPCODES
     _precompiles = FRONTIER_PRECOMPILES
 
     def apply_message(self):
-        snapshot = self.vm_state.snapshot()
+        snapshot = self.state.snapshot()
 
-        if self.msg.depth > constants.STACK_DEPTH_LIMIT:
+        if self.msg.depth > STACK_DEPTH_LIMIT:
             raise StackDepthLimit("Stack depth limit reached")
 
         if self.msg.should_transfer_value and self.msg.value:
-            with self.vm_state.state_db() as state_db:
-                sender_balance = state_db.get_balance(self.msg.sender)
+            sender_balance = self.state.account_db.get_balance(self.msg.sender)
 
-                if sender_balance < self.msg.value:
-                    raise InsufficientFunds(
-                        "Insufficient funds: {0} < {1}".format(sender_balance, self.msg.value)
-                    )
+            if sender_balance < self.msg.value:
+                raise InsufficientFunds(
+                    "Insufficient funds: {0} < {1}".format(sender_balance, self.msg.value)
+                )
 
-                state_db.delta_balance(self.msg.sender, -1 * self.msg.value)
-                state_db.delta_balance(self.msg.storage_address, self.msg.value)
+            self.state.account_db.delta_balance(self.msg.sender, -1 * self.msg.value)
+            self.state.account_db.delta_balance(self.msg.storage_address, self.msg.value)
 
-            self.logger.debug(
+            self.logger.trace(
                 "TRANSFERRED: %s from %s -> %s",
                 self.msg.value,
                 encode_hex(self.msg.sender),
                 encode_hex(self.msg.storage_address),
             )
 
-        with self.vm_state.state_db() as state_db:
-            state_db.touch_account(self.msg.storage_address)
+        self.state.account_db.touch_account(self.msg.storage_address)
 
         computation = self.apply_computation(
-            self.vm_state,
+            self.state,
             self.msg,
+            self.transaction_context,
         )
 
         if computation.is_error:
-            self.vm_state.revert(snapshot)
+            self.state.revert(snapshot)
         else:
-            self.vm_state.commit(snapshot)
+            self.state.commit(snapshot)
 
         return computation
 
@@ -82,21 +87,20 @@ class FrontierComputation(BaseComputation):
             contract_code = computation.output
 
             if contract_code:
-                contract_code_gas_fee = len(contract_code) * constants.GAS_CODEDEPOSIT
+                contract_code_gas_fee = len(contract_code) * GAS_CODEDEPOSIT
                 try:
-                    computation.gas_meter.consume_gas(
+                    computation.consume_gas(
                         contract_code_gas_fee,
                         reason="Write contract code for CREATE",
                     )
                 except OutOfGas:
                     computation.output = b''
                 else:
-                    self.logger.debug(
+                    self.logger.trace(
                         "SETTING CODE: %s -> length: %s | hash: %s",
                         encode_hex(self.msg.storage_address),
                         len(contract_code),
                         encode_hex(keccak(contract_code))
                     )
-                    with self.vm_state.state_db() as state_db:
-                        state_db.set_code(self.msg.storage_address, contract_code)
+                    self.state.account_db.set_code(self.msg.storage_address, contract_code)
             return computation

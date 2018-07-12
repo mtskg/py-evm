@@ -10,7 +10,7 @@ from evm.rlp.headers import (
     BlockHeader,
 )
 
-from evm.utils.fixture_tests import (
+from evm.tools.fixture_tests import (
     apply_fixture_block_to_chain,
     new_chain_from_fixture,
     genesis_params_from_fixture,
@@ -18,7 +18,7 @@ from evm.utils.fixture_tests import (
     generate_fixture_tests,
     filter_fixtures,
     normalize_blockchain_fixtures,
-    verify_state_db,
+    verify_account_db,
     assert_rlp_equal,
 )
 
@@ -99,16 +99,19 @@ def test_blockchain_fixtures(fixture_data, fixture):
             assert not should_be_good_block
             continue
 
-        try:
+        if should_be_good_block:
             (block, mined_block, block_rlp) = apply_fixture_block_to_chain(block_fixture, chain)
-        except (TypeError, rlp.DecodingError, rlp.DeserializationError, ValidationError) as err:
-            assert not should_be_good_block, "Block should be good: {0}".format(err)
-        else:
             assert_rlp_equal(block, mined_block)
-            assert should_be_good_block, "Block should have caused a validation error"
+        else:
+            try:
+                apply_fixture_block_to_chain(block_fixture, chain)
+            except (TypeError, rlp.DecodingError, rlp.DeserializationError, ValidationError) as err:
+                # failure is expected on this bad block
+                pass
+            else:
+                raise AssertionError("Block should have caused a validation error")
 
     latest_block_hash = chain.get_canonical_block_by_number(chain.get_block().number - 1).hash
     assert latest_block_hash == fixture['lastblockhash']
 
-    with chain.get_vm().state.state_db(read_only=True) as state_db:
-        verify_state_db(fixture['postState'], state_db)
+    verify_account_db(fixture['postState'], chain.get_vm().state.account_db)

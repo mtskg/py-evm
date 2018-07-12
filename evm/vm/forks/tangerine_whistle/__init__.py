@@ -1,8 +1,18 @@
+from typing import Type  # noqa: F401
+from evm.vm.state import BaseState  # noqa: F401
+
 from evm.vm.forks.homestead import HomesteadVM
 
-from .vm_state import TangerineWhistleVMState
+from .state import TangerineWhistleState
 
-TangerineWhistleVM = HomesteadVM.configure(
-    name='TangerineWhistleVM',
-    _state_class=TangerineWhistleVMState,
-)
+
+class TangerineWhistleVM(HomesteadVM):
+    # fork name
+    fork = 'tangerine-whistle'  # type: str
+
+    # classes
+    _state_class = TangerineWhistleState  # type: Type[BaseState]
+
+    # Don't bother with any DAO logic in Tangerine VM or later
+    # This is how we skip DAO logic on Ropsten, for example
+    support_dao_fork = False

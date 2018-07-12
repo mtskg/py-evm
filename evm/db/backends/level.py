@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from .base import (
     BaseDB,
 )
@@ -6,27 +8,28 @@ from .base import (
 class LevelDB(BaseDB):
 
     # Creates db as a class variable to avoid level db lock error
-    def __init__(self, db_path=None):
+    def __init__(self, db_path: Path = None) -> None:
         if not db_path:
             raise TypeError("Please specifiy a valid path for your database.")
         try:
-            import leveldb
+            import plyvel
         except ImportError:
-            raise ImportError("LevelDB requires the leveldb \
+            raise ImportError("LevelDB requires the plyvel \
                                library which is not available for import.")
         self.db_path = db_path
-        self.db = leveldb.LevelDB(db_path, create_if_missing=True, error_if_exists=False)
+        self.db = plyvel.DB(str(db_path), create_if_missing=True, error_if_exists=False)
 
-    def get(self, key):
-        # 'Get' Returns a bytearray which needs to be converted to straight bytes
-        return bytes(self.db.Get(key))
+    def __getitem__(self, key: bytes) -> bytes:
+        v = self.db.get(key)
+        if v is None:
+            raise KeyError(key)
+        return v
 
-    def set(self, key, value):
-        self.db.Put(key, value)
+    def __setitem__(self, key: bytes, value: bytes) -> None:
+        self.db.put(key, value)
 
-    # Returns False instead of KeyError if key doesn't exist
-    def exists(self, key):
-        return bool(self.db.Get(key, default=False))
+    def _exists(self, key: bytes) -> bool:
+        return self.db.get(key) is not None
 
-    def delete(self, key):
-        self.db.Delete(key)
+    def __delitem__(self, key: bytes) -> None:
+        self.db.delete(key)

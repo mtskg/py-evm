@@ -43,6 +43,7 @@ docs/modules.rst
 
 # pytest
 .cache/
+.pytest_cache/
 
 # fixtures
 fixtures/**
@@ -62,3 +63,9 @@ venv*
 
 # vscode
 .vscode/**
+
+# monkeytype
+monkeytype.sqlite3
+
+# pyenv
+.python-version

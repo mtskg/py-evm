@@ -45,6 +45,8 @@ extensions = [
     'sphinxcontrib.asyncio',
 ]
 
+autodoc_default_flags = ['undoc-members']
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
@@ -59,7 +61,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = about['__name__']
-copyright = '2017, Piper Merriam, Jason Carver'
+copyright = '2017-2018 Ethereum Foundation'
 author = about['__author__']
 
 # The version info for the project you're documenting, acts as replacement for
@@ -176,29 +178,5 @@ texinfo_documents = [
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3.5', None),
+    'eth-typing': ('https://eth-typing.readthedocs.io/en/latest', None),
 }
-
-# -- autodoc on any sphinx-build, to support RTD ---------------------------
-
-
-def run_apidoc(_):
-    from sphinx.apidoc import main
-    import os
-    import sys
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-    cur_dir = os.path.abspath(os.path.dirname(__file__))
-    package = os.path.join(cur_dir, "..")
-    main([
-        None,
-        '-o',
-        cur_dir,
-        '--force',
-        package,
-        package + "/tests/*",
-        package + "/setup.py",
-        package + '/.eggs/*',
-    ])
-
-
-def setup(app):
-    app.connect('builder-inited', run_apidoc)

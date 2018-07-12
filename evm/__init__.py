@@ -1,28 +1,22 @@
-import logging
 import pkg_resources
 import sys
 
 from evm.utils.logging import (
-    trace,
-    TRACE_LEVEL_NUM,
-)
-
-from evm.vm import (  # noqa: F401
-    VM,
-)
-from evm.chains import (  # noqa: F401
-    Chain,
-    MainnetChain,
-    MainnetTesterChain,
+    setup_trace_logging
 )
 
 #
 #  Setup TRACE level logging.
 #
-logging.addLevelName(TRACE_LEVEL_NUM, 'TRACE')
-logging.TRACE = TRACE_LEVEL_NUM
-logging.Logger.trace = trace
+# This needs to be done before the other imports
+setup_trace_logging()
 
+from evm.chains import (  # noqa: F401
+    Chain,
+    MainnetChain,
+    MainnetTesterChain,
+    RopstenChain,
+)
 
 #
 #  Ensure we can reach 1024 frames of recursion

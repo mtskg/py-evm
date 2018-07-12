@@ -1,3 +1,7 @@
+from typing import (  # noqa: F401
+    List
+)
+
 import rlp
 from rlp.sedes import (
     CountableList,
@@ -6,6 +10,8 @@ from rlp.sedes import (
 from eth_bloom import (
     BloomFilter,
 )
+
+from eth_hash.auto import keccak
 
 from evm.constants import (
     EMPTY_UNCLE_HASH,
@@ -18,10 +24,6 @@ from evm.rlp.blocks import (
 )
 from evm.rlp.headers import (
     BlockHeader,
-)
-
-from evm.utils.keccak import (
-    keccak,
 )
 
 from .transactions import (
@@ -47,7 +49,7 @@ class FrontierBlock(BaseBlock):
 
         self.bloom_filter = BloomFilter(header.bloom)
 
-        super(FrontierBlock, self).__init__(
+        super().__init__(
             header=header,
             transactions=transactions,
             uncles=uncles,
@@ -87,7 +89,7 @@ class FrontierBlock(BaseBlock):
         Returns the block denoted by the given block header.
         """
         if header.uncles_hash == EMPTY_UNCLE_HASH:
-            uncles = []
+            uncles = []  # type: List[bytes]
         else:
             uncles = chaindb.get_block_uncles(header.uncles_hash)
 

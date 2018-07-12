@@ -2,37 +2,25 @@ from cytoolz import (
     curry,
 )
 
+
 from evm.utils.spoof import (
     SpoofTransaction,
 )
 
 
-@curry
-def execute_plus_buffer(multiplier, state, transaction):
-    computation = state.execute_transaction(transaction)
-
-    if computation.is_error:
-        raise computation._error
-
-    gas_used = transaction.gas_used_by(computation)
-
-    gas_plus_buffer = int(gas_used * multiplier)
-
-    return min(gas_plus_buffer, state.gas_limit)
-
-
-double_execution_cost = execute_plus_buffer(2)
-
-
 def _get_computation_error(state, transaction):
-    snapshot = state.snapshot()
-    computation = state.execute_transaction(transaction)
-    state.revert(snapshot)
 
-    if computation.is_error:
-        return computation._error
-    else:
-        return None
+    snapshot = state.snapshot()
+
+    try:
+        computation = state.execute_transaction(transaction)
+        if computation.is_error:
+            return computation._error
+        else:
+            return None
+
+    finally:
+        state.revert(snapshot)
 
 
 @curry
@@ -41,7 +29,8 @@ def binary_gas_search(state, transaction, tolerance=1):
     Run the transaction with various gas limits, progressively
     approaching the minimum needed to succeed without an OutOfGas exception.
 
-    The starting range of possible estimates is: [transaction.intrinsic_gas, state.gas_limit].
+    The starting range of possible estimates is:
+    [transaction.intrinsic_gas, state.gas_limit].
     After the first OutOfGas exception, the range is: (largest_limit_out_of_gas, state.gas_limit].
     After the first run not out of gas, the range is: (largest_limit_out_of_gas, smallest_success].
 
@@ -51,11 +40,26 @@ def binary_gas_search(state, transaction, tolerance=1):
         subject to tolerance. If OutOfGas is thrown at block limit, return block limit.
     :raises VMError: if the computation fails even when given the block gas_limit to complete
     """
-    minimum_transaction = SpoofTransaction(transaction, gas=transaction.intrinsic_gas)
+    if not hasattr(transaction, 'sender'):
+        raise TypeError(
+            "Transaction is missing attribute sender.",
+            "If sending an unsigned transaction, use SpoofTransaction and provide the",
+            "sender using the 'from' parameter")
+
+    minimum_transaction = SpoofTransaction(
+        transaction,
+        gas=transaction.intrinsic_gas,
+        gas_price=0,
+    )
+
     if _get_computation_error(state, minimum_transaction) is None:
         return transaction.intrinsic_gas
 
-    maximum_transaction = SpoofTransaction(transaction, gas=state.gas_limit)
+    maximum_transaction = SpoofTransaction(
+        transaction,
+        gas=state.gas_limit,
+        gas_price=0,
+    )
     error = _get_computation_error(state, maximum_transaction)
     if error is not None:
         raise error

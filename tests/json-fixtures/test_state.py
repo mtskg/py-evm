@@ -9,11 +9,13 @@ from evm.db import (
 )
 
 from eth_utils import (
-    keccak,
+    to_bytes,
     to_tuple,
 )
 
-from evm.db.chain import BaseChainDB
+from eth_hash.auto import keccak
+
+from evm.db.chain import ChainDB
 from evm.exceptions import (
     ValidationError,
 )
@@ -24,30 +26,41 @@ from evm.vm.forks import (
     SpuriousDragonVM,
     ByzantiumVM,
 )
-from evm.vm.forks.tangerine_whistle.vm_state import TangerineWhistleVMState
-from evm.vm.forks.frontier.vm_state import FrontierVMState
-from evm.vm.forks.homestead.vm_state import HomesteadVMState
-from evm.vm.forks.spurious_dragon.vm_state import SpuriousDragonVMState
-from evm.vm.forks.byzantium.vm_state import ByzantiumVMState
+from evm.vm.forks.tangerine_whistle.state import TangerineWhistleState
+from evm.vm.forks.frontier.state import FrontierState
+from evm.vm.forks.homestead.state import HomesteadState
+from evm.vm.forks.spurious_dragon.state import SpuriousDragonState
+from evm.vm.forks.byzantium.state import ByzantiumState
 
 from evm.rlp.headers import (
     BlockHeader,
 )
-from evm.utils.fixture_tests import (
+from evm.tools.fixture_tests import (
     filter_fixtures,
     generate_fixture_tests,
     hash_log_entries,
     load_fixture,
     normalize_statetest_fixture,
-    setup_state_db,
     should_run_slow_tests,
 )
+from evm.utils.db import (
+    apply_state_dict,
+)
+
+from eth_typing.enums import (
+    ForkName
+)
+
+from tests.conftest import vm_logger
 
 
 ROOT_PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
 
 BASE_FIXTURE_PATH = os.path.join(ROOT_PROJECT_DIR, 'fixtures', 'GeneralStateTests')
+
+
+LOGGER = vm_logger()
 
 
 @to_tuple
@@ -57,6 +70,7 @@ def expand_fixtures_forks(all_fixtures):
     expanded one step further to have one fixture for each defined fork within
     the fixture.
     """
+
     for fixture_path, fixture_key in all_fixtures:
         fixture = load_fixture(fixture_path, fixture_key)
         for fixture_fork, post_states in sorted(fixture['post'].items()):
@@ -167,7 +181,7 @@ def get_block_hash_for_testing(self, block_number):
     elif block_number < self.block_number - 256:
         return b''
     else:
-        return keccak("{0}".format(block_number))
+        return keccak(to_bytes(text="{0}".format(block_number)))
 
 
 def get_prev_hashes_testing(self, last_block_hash, db):
@@ -175,50 +189,50 @@ def get_prev_hashes_testing(self, last_block_hash, db):
     return prev_hashes
 
 
-FrontierVMStateForTesting = FrontierVMState.configure(
-    name='FrontierVMStateForTesting',
+FrontierStateForTesting = FrontierState.configure(
+    __name__='FrontierStateForTesting',
     get_ancestor_hash=get_block_hash_for_testing,
 )
-HomesteadVMStateForTesting = HomesteadVMState.configure(
-    name='HomesteadVMStateForTesting',
+HomesteadStateForTesting = HomesteadState.configure(
+    __name__='HomesteadStateForTesting',
     get_ancestor_hash=get_block_hash_for_testing,
 )
-TangerineWhistleVMStateForTesting = TangerineWhistleVMState.configure(
-    name='TangerineWhistleVMStateForTesting',
+TangerineWhistleStateForTesting = TangerineWhistleState.configure(
+    __name__='TangerineWhistleStateForTesting',
     get_ancestor_hash=get_block_hash_for_testing,
 )
-SpuriousDragonVMStateForTesting = SpuriousDragonVMState.configure(
-    name='SpuriousDragonVMStateForTesting',
+SpuriousDragonStateForTesting = SpuriousDragonState.configure(
+    __name__='SpuriousDragonStateForTesting',
     get_ancestor_hash=get_block_hash_for_testing,
 )
-ByzantiumVMStateForTesting = ByzantiumVMState.configure(
-    name='ByzantiumVMStateForTesting',
+ByzantiumStateForTesting = ByzantiumState.configure(
+    __name__='ByzantiumStateForTesting',
     get_ancestor_hash=get_block_hash_for_testing,
 )
 
 FrontierVMForTesting = FrontierVM.configure(
-    name='FrontierVMForTesting',
-    _state_class=FrontierVMStateForTesting,
+    __name__='FrontierVMForTesting',
+    _state_class=FrontierStateForTesting,
     get_prev_hashes=get_prev_hashes_testing,
 )
 HomesteadVMForTesting = HomesteadVM.configure(
-    name='HomesteadVMForTesting',
-    _state_class=HomesteadVMStateForTesting,
+    __name__='HomesteadVMForTesting',
+    _state_class=HomesteadStateForTesting,
     get_prev_hashes=get_prev_hashes_testing,
 )
 TangerineWhistleVMForTesting = TangerineWhistleVM.configure(
-    name='TangerineWhistleVMForTesting',
-    _state_class=TangerineWhistleVMStateForTesting,
+    __name__='TangerineWhistleVMForTesting',
+    _state_class=TangerineWhistleStateForTesting,
     get_prev_hashes=get_prev_hashes_testing,
 )
 SpuriousDragonVMForTesting = SpuriousDragonVM.configure(
-    name='SpuriousDragonVMForTesting',
-    _state_class=SpuriousDragonVMStateForTesting,
+    __name__='SpuriousDragonVMForTesting',
+    _state_class=SpuriousDragonStateForTesting,
     get_prev_hashes=get_prev_hashes_testing,
 )
 ByzantiumVMForTesting = ByzantiumVM.configure(
-    name='ByzantiumVMForTesting',
-    _state_class=ByzantiumVMStateForTesting,
+    __name__='ByzantiumVMForTesting',
+    _state_class=ByzantiumStateForTesting,
     get_prev_hashes=get_prev_hashes_testing,
 )
 
@@ -226,19 +240,19 @@ ByzantiumVMForTesting = ByzantiumVM.configure(
 @pytest.fixture
 def fixture_vm_class(fixture_data):
     _, _, fork_name, _ = fixture_data
-    if fork_name == 'Frontier':
+    if fork_name == ForkName.Frontier:
         return FrontierVMForTesting
-    elif fork_name == 'Homestead':
+    elif fork_name == ForkName.Homestead:
         return HomesteadVMForTesting
-    elif fork_name == 'EIP150':
+    elif fork_name == ForkName.EIP150:
         return TangerineWhistleVMForTesting
-    elif fork_name == 'EIP158':
+    elif fork_name == ForkName.EIP158:
         return SpuriousDragonVMForTesting
-    elif fork_name == 'Byzantium':
+    elif fork_name == ForkName.Byzantium:
         return ByzantiumVMForTesting
-    elif fork_name == 'Constantinople':
+    elif fork_name == ForkName.Constantinople:
         pytest.skip("Constantinople VM has not been implemented")
-    elif fork_name == 'Metropolis':
+    elif fork_name == ForkName.Metropolis:
         pytest.skip("Metropolis VM has not been implemented")
     else:
         raise ValueError("Unknown Fork Name: {0}".format(fork_name))
@@ -253,15 +267,16 @@ def test_state_fixtures(fixture, fixture_vm_class):
         timestamp=fixture['env']['currentTimestamp'],
         parent_hash=fixture['env']['previousHash'],
     )
-    chaindb = BaseChainDB(get_db_backend())
+
+    chaindb = ChainDB(get_db_backend())
     vm = fixture_vm_class(header=header, chaindb=chaindb)
 
-    vm_state = vm.state
-    with vm_state.state_db() as state_db:
-        setup_state_db(fixture['pre'], state_db)
-    # Update state_root manually
-    vm.block.header.state_root = vm_state.state_root
+    state = vm.state
+    apply_state_dict(state.account_db, fixture['pre'])
+    state.account_db.persist()
 
+    # Update state_root manually
+    vm.block = vm.block.copy(header=vm.block.header.copy(state_root=state.state_root))
     if 'secretKey' in fixture['transaction']:
         unsigned_transaction = vm.create_unsigned_transaction(
             nonce=fixture['transaction']['nonce'],
@@ -292,9 +307,14 @@ def test_state_fixtures(fixture, fixture_vm_class):
         )
 
     try:
-        computation, _ = vm.apply_transaction(transaction)
+        header, receipt, computation = vm.apply_transaction(vm.block.header, transaction)
+        transactions = vm.block.transactions + (transaction, )
+        receipts = vm.block.get_receipts(chaindb) + (receipt, )
+        block = vm.set_block_transactions(vm.block, header, transactions, receipts)
     except ValidationError as err:
+        block = vm.block
         transaction_error = err
+        LOGGER.warn("Got transaction error", exc_info=True)
     else:
         transaction_error = False
 
@@ -317,4 +337,4 @@ def test_state_fixtures(fixture, fixture_vm_class):
             else:
                 assert computation.output == expected_output
 
-    assert vm.block.header.state_root == fixture['post']['hash']
+    assert block.header.state_root == fixture['post']['hash']

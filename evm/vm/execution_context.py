@@ -1,8 +1,6 @@
 class ExecutionContext:
-    # For shard chain, refer to the shard coinbase.
     _coinbase = None
 
-    # For shard chian, block info of period_start_prevhash.
     _timestamp = None
     _number = None
     _difficulty = None
@@ -23,19 +21,6 @@ class ExecutionContext:
         self._difficulty = difficulty
         self._gas_limit = gas_limit
         self._prev_hashes = prev_hashes
-
-    @classmethod
-    def from_block_header(cls, block_header, prev_hashes, coinbase=None):
-        if coinbase is None:
-            coinbase = block_header.coinbase
-        return cls(
-            coinbase=coinbase,
-            timestamp=block_header.timestamp,
-            block_number=block_header.block_number,
-            difficulty=block_header.difficulty,
-            gas_limit=block_header.gas_limit,
-            prev_hashes=prev_hashes,
-        )
 
     @property
     def coinbase(self):

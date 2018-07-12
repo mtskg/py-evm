@@ -7,21 +7,26 @@ from hypothesis import (
 
 import rlp
 
-from evm.utils.fixture_tests import (
-    assert_rlp_equal,
-)
+from eth_hash.auto import keccak
 
-from evm.db import (
-    get_db_backend,
+from evm.constants import (
+    BLANK_ROOT_HASH,
 )
+from evm.db.backends.memory import MemoryDB
 from evm.db.chain import (
-    BaseChainDB,
+    ChainDB,
 )
+from evm.db.schema import SchemaV1
 from evm.exceptions import (
-    BlockNotFound,
+    HeaderNotFound,
     ParentNotFound,
 )
-
+from evm.rlp.headers import (
+    BlockHeader,
+)
+from evm.tools.fixture_tests import (
+    assert_rlp_equal,
+)
 from evm.vm.forks.frontier.blocks import (
     FrontierBlock,
 )
@@ -29,22 +34,27 @@ from evm.vm.forks.homestead.blocks import (
     HomesteadBlock,
 )
 
-from evm.rlp.headers import (
-    BlockHeader,
-)
 
-from evm.utils.db import (
-    make_block_hash_to_score_lookup_key,
-    make_block_number_to_hash_lookup_key,
-)
-from evm.utils.keccak import (
-    keccak,
-)
+A_ADDRESS = b"\xaa" * 20
+B_ADDRESS = b"\xbb" * 20
+
+
+def set_empty_root(chaindb, header):
+    return header.copy(
+        transaction_root=BLANK_ROOT_HASH,
+        receipt_root=BLANK_ROOT_HASH,
+        state_root=BLANK_ROOT_HASH,
+    )
 
 
 @pytest.fixture
-def chaindb():
-    return BaseChainDB(get_db_backend())
+def base_db():
+    return MemoryDB()
+
+
+@pytest.fixture
+def chaindb(base_db):
+    return ChainDB(base_db)
 
 
 @pytest.fixture(params=[0, 10, 999])
@@ -60,64 +70,68 @@ def block(request, header):
     return request.param(header)
 
 
-def test_add_block_number_to_hash_lookup(chaindb, block):
-    block_number_to_hash_key = make_block_number_to_hash_lookup_key(block.number)
+def test_chaindb_add_block_number_to_hash_lookup(chaindb, block):
+    block_number_to_hash_key = SchemaV1.make_block_number_to_hash_lookup_key(block.number)
     assert not chaindb.exists(block_number_to_hash_key)
-    chaindb.add_block_number_to_hash_lookup(block.header)
+    chaindb._add_block_number_to_hash_lookup(block.header)
     assert chaindb.exists(block_number_to_hash_key)
 
 
-def test_persist_header_to_db(chaindb, header):
-    with pytest.raises(BlockNotFound):
+def test_chaindb_persist_header(chaindb, header):
+    with pytest.raises(HeaderNotFound):
         chaindb.get_block_header_by_hash(header.hash)
-    number_to_hash_key = make_block_hash_to_score_lookup_key(header.hash)
+    number_to_hash_key = SchemaV1.make_block_hash_to_score_lookup_key(header.hash)
     assert not chaindb.exists(number_to_hash_key)
 
-    chaindb.persist_header_to_db(header)
+    chaindb.persist_header(header)
 
     assert chaindb.get_block_header_by_hash(header.hash) == header
     assert chaindb.exists(number_to_hash_key)
 
 
 @given(seed=st.binary(min_size=32, max_size=32))
-def test_persist_header_to_db_unknown_parent(chaindb, header, seed):
-    header.parent_hash = keccak(seed)
+def test_chaindb_persist_header_unknown_parent(chaindb, header, seed):
+    n_header = header.copy(parent_hash=keccak(seed))
     with pytest.raises(ParentNotFound):
-        chaindb.persist_header_to_db(header)
+        chaindb.persist_header(n_header)
 
 
-def test_persist_block_to_db(chaindb, block):
-    block_to_hash_key = make_block_hash_to_score_lookup_key(block.hash)
+def test_chaindb_persist_block(chaindb, block):
+    block = block.copy(header=set_empty_root(chaindb, block.header))
+    block_to_hash_key = SchemaV1.make_block_hash_to_score_lookup_key(block.hash)
     assert not chaindb.exists(block_to_hash_key)
-    chaindb.persist_block_to_db(block)
+    chaindb.persist_block(block)
     assert chaindb.exists(block_to_hash_key)
 
 
-def test_get_score(chaindb):
+def test_chaindb_get_score(chaindb):
     genesis = BlockHeader(difficulty=1, block_number=0, gas_limit=0)
-    chaindb.persist_header_to_db(genesis)
+    chaindb.persist_header(genesis)
 
-    genesis_score_key = make_block_hash_to_score_lookup_key(genesis.hash)
+    genesis_score_key = SchemaV1.make_block_hash_to_score_lookup_key(genesis.hash)
     genesis_score = rlp.decode(chaindb.db.get(genesis_score_key), sedes=rlp.sedes.big_endian_int)
     assert genesis_score == 1
     assert chaindb.get_score(genesis.hash) == 1
 
     block1 = BlockHeader(difficulty=10, block_number=1, gas_limit=0, parent_hash=genesis.hash)
-    chaindb.persist_header_to_db(block1)
+    chaindb.persist_header(block1)
 
-    block1_score_key = make_block_hash_to_score_lookup_key(block1.hash)
+    block1_score_key = SchemaV1.make_block_hash_to_score_lookup_key(block1.hash)
     block1_score = rlp.decode(chaindb.db.get(block1_score_key), sedes=rlp.sedes.big_endian_int)
     assert block1_score == 11
     assert chaindb.get_score(block1.hash) == 11
 
 
-def test_get_block_header_by_hash(chaindb, block, header):
-    chaindb.persist_block_to_db(block)
+def test_chaindb_get_block_header_by_hash(chaindb, block, header):
+    block = block.copy(header=set_empty_root(chaindb, block.header))
+    header = set_empty_root(chaindb, header)
+    chaindb.persist_block(block)
     block_header = chaindb.get_block_header_by_hash(block.hash)
     assert_rlp_equal(block_header, header)
 
 
-def test_lookup_block_hash(chaindb, block):
-    chaindb.add_block_number_to_hash_lookup(block.header)
-    block_hash = chaindb.lookup_block_hash(block.number)
+def test_chaindb_get_canonical_block_hash(chaindb, block):
+    block = block.copy(header=set_empty_root(chaindb, block.header))
+    chaindb._add_block_number_to_hash_lookup(block.header)
+    block_hash = chaindb.get_canonical_block_hash(block.number)
     assert block_hash == block.hash

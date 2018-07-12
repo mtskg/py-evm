@@ -1,8 +1,22 @@
+from abc import (
+    ABC,
+    abstractmethod
+)
+from typing import (
+    Any,
+)
+
 import rlp
 from rlp.sedes import (
     big_endian_int,
     binary,
 )
+
+from eth_typing import (
+    Address
+)
+
+from eth_hash.auto import keccak
 
 from evm.exceptions import (
     ValidationError,
@@ -11,12 +25,47 @@ from evm.exceptions import (
 from evm.rlp.sedes import (
     address,
 )
-from evm.utils.keccak import (
-    keccak,
+
+from evm.vm.computation import (
+    BaseComputation
 )
 
 
-class BaseTransaction(rlp.Serializable):
+class BaseTransactionMethods:
+    def validate(self) -> None:
+        """
+        Hook called during instantiation to ensure that all transaction
+        parameters pass validation rules.
+        """
+        pass
+
+    @property
+    def intrinsic_gas(self) -> int:
+        """
+        Convenience property for the return value of `get_intrinsic_gas`
+        """
+        return self.get_intrinsic_gas()
+
+    @abstractmethod
+    def get_intrinsic_gas(self) -> int:
+        """
+        Compute the baseline gas cost for this transaction.  This is the amount
+        of gas needed to send this transaction (but that is not actually used
+        for computation).
+        """
+        raise NotImplementedError("Must be implemented by subclasses")
+
+    def gas_used_by(self, computation: BaseComputation) -> int:
+        """
+        Return the gas used by the given computation. In Frontier,
+        for example, this is sum of the intrinsic cost and the gas used
+        during computation.
+        """
+        return self.get_intrinsic_gas() + computation.get_gas_used()
+
+
+class BaseTransactionFields(rlp.Serializable):
+
     fields = [
         ('nonce', big_endian_int),
         ('gas_price', big_endian_int),
@@ -29,27 +78,23 @@ class BaseTransaction(rlp.Serializable):
         ('s', big_endian_int),
     ]
 
+    @property
+    def hash(self) -> bytes:
+        return keccak(rlp.encode(self))
+
+
+class BaseTransaction(BaseTransactionFields, BaseTransactionMethods):
+
     @classmethod
-    def from_base_transaction(cls, transaction):
+    def from_base_transaction(cls, transaction: 'BaseTransaction') -> 'BaseTransaction':
         return rlp.decode(rlp.encode(transaction), sedes=cls)
 
     @property
-    def hash(self):
-        return keccak(rlp.encode(self))
-
-    @property
-    def sender(self):
+    def sender(self) -> Address:
         """
         Convenience property for the return value of `get_sender`
         """
         return self.get_sender()
-
-    @property
-    def intrinsic_gas(self):
-        """
-        Convenience property for the return value of `get_intrinsic_gas`
-        """
-        return self.get_intrinsic_gas()
 
     # +-------------------------------------------------------------+
     # | API that must be implemented by all Transaction subclasses. |
@@ -58,12 +103,12 @@ class BaseTransaction(rlp.Serializable):
     #
     # Validation
     #
-    def validate(self):
+    def validate(self) -> None:
         """
         Hook called during instantiation to ensure that all transaction
         parameters pass validation rules.
         """
-        if self.intrinsic_gas > self.gas:
+        if self.gas < self.intrinsic_gas:
             raise ValidationError("Insufficient gas")
         self.check_signature_validity()
 
@@ -71,7 +116,7 @@ class BaseTransaction(rlp.Serializable):
     # Signature and Sender
     #
     @property
-    def is_signature_valid(self):
+    def is_signature_valid(self) -> bool:
         try:
             self.check_signature_validity()
         except ValidationError:
@@ -79,56 +124,41 @@ class BaseTransaction(rlp.Serializable):
         else:
             return True
 
-    def check_signature_validity(self):
+    @abstractmethod
+    def check_signature_validity(self) -> None:
         """
         Checks signature validity, raising a ValidationError if the signature
         is invalid.
         """
         raise NotImplementedError("Must be implemented by subclasses")
 
-    def get_sender(self):
+    @abstractmethod
+    def get_sender(self) -> Address:
         """
         Get the 20-byte address which sent this transaction.
         """
         raise NotImplementedError("Must be implemented by subclasses")
 
     #
-    # Get gas costs
-    #
-    def get_intrinsic_gas(self):
-        """
-        Compute the baseline gas cost for this transaction.  This is the amount
-        of gas needed to send this transaction (but that is not actually used
-        for computation).
-        """
-        raise NotImplementedError("Must be implemented by subclasses")
-
-    def gas_used_by(self, computation):
-        """
-        Return the gas used by the given computation. In Frontier,
-        for example, this is sum of the intrinsic cost and the gas used
-        during computation.
-        """
-        return self.get_intrinsic_gas() + computation.get_gas_used()
-
-    #
     # Conversion to and creation of unsigned transactions.
     #
-    def get_message_for_signing(self):
+    @abstractmethod
+    def get_message_for_signing(self) -> bytes:
         """
         Return the bytestring that should be signed in order to create a signed transactions
         """
         raise NotImplementedError("Must be implemented by subclasses")
 
     @classmethod
-    def create_unsigned_transaction(self, *args, **kwargs):
+    @abstractmethod
+    def create_unsigned_transaction(self, *args: Any, **kwargs: Any) -> 'BaseTransaction':
         """
         Create an unsigned transaction.
         """
         raise NotImplementedError("Must be implemented by subclasses")
 
 
-class BaseUnsignedTransaction(rlp.Serializable):
+class BaseUnsignedTransaction(rlp.Serializable, BaseTransactionMethods, ABC):
     fields = [
         ('nonce', big_endian_int),
         ('gas_price', big_endian_int),
@@ -141,14 +171,8 @@ class BaseUnsignedTransaction(rlp.Serializable):
     #
     # API that must be implemented by all Transaction subclasses.
     #
-    def validate(self):
-        """
-        Hook called during instantiation to ensure that all transaction
-        parameters pass validation rules.
-        """
-        pass
-
-    def as_signed_transaction(self, private_key):
+    @abstractmethod
+    def as_signed_transaction(self, private_key: bytes) -> 'BaseTransaction':
         """
         Return a version of this transaction which has been signed using the
         provided `private_key`

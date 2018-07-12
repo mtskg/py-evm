@@ -1,5 +1,9 @@
+from typing import Type  # noqa: F401
+from evm.rlp.blocks import BaseBlock  # noqa: F401
+from evm.vm.state import BaseState  # noqa: F401
+
 from evm.chains.mainnet.constants import (
-    DAO_FORK_BLOCK_NUMBER
+    DAO_FORK_MAINNET_BLOCK
 )
 from evm.vm.forks.frontier import FrontierVM
 
@@ -9,21 +13,23 @@ from .headers import (
     compute_homestead_difficulty,
     configure_homestead_header,
 )
-from .vm_state import HomesteadVMState
+from .state import HomesteadState
 
 
 class MetaHomesteadVM(FrontierVM):
     support_dao_fork = True
-    dao_fork_block_number = DAO_FORK_BLOCK_NUMBER
+    dao_fork_block_number = DAO_FORK_MAINNET_BLOCK
 
 
-HomesteadVM = MetaHomesteadVM.configure(
-    name='HomesteadVM',
+class HomesteadVM(MetaHomesteadVM):
+    # fork name
+    fork = 'homestead'  # type: str
+
     # classes
-    _block_class=HomesteadBlock,
-    _state_class=HomesteadVMState,
+    block_class = HomesteadBlock  # type: Type[BaseBlock]
+    _state_class = HomesteadState  # type: Type[BaseState]
+
     # method overrides
-    create_header_from_parent=staticmethod(create_homestead_header_from_parent),
-    compute_difficulty=staticmethod(compute_homestead_difficulty),
-    configure_header=configure_homestead_header,
-)
+    create_header_from_parent = staticmethod(create_homestead_header_from_parent)
+    compute_difficulty = staticmethod(compute_homestead_difficulty)
+    configure_header = configure_homestead_header

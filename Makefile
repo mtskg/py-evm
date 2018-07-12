@@ -23,8 +23,7 @@ clean-pyc:
 	find . -name '*~' -exec rm -f {} +
 
 lint:
-	flake8 evm
-	flake8 tests --exclude=""
+	tox -elint-py3{6,5}
 
 test:
 	py.test --tb native tests
@@ -48,7 +47,12 @@ linux-docs: build-docs
 	xdg-open docs/_build/html/index.html
 
 release: clean
+	CURRENT_SIGN_SETTING=$(git config commit.gpgSign)
+	git config commit.gpgSign true
+	bumpversion $(bump)
+	git push upstream && git push upstream --tags
 	python setup.py sdist bdist_wheel upload
+	git config commit.gpgSign "$(CURRENT_SIGN_SETTING)"
 
 sdist: clean
 	python setup.py sdist bdist_wheel
